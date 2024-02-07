@@ -1,4 +1,4 @@
-# Ansible Playbook for Deploying ollama-webui and [liteLLM-proxy](https://github.com/BerriAI/liteLLM-proxy) - Azure OpenAI
+# Ansible Playbook for Deploying [ollama-webui](https://github.com/ollama-webui/ollama-webui) and [liteLLM-proxy](https://github.com/BerriAI/liteLLM-proxy) - Azure OpenAI
 
 This ansible playbook helps to automate the deployment of two containers, `ollama-webui` and `liteLLM-proxy` using Docker. It also enables integration with Azure Cognitive Services - OpenAI.
 
