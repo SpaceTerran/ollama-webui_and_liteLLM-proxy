@@ -1,0 +1,12 @@
+model_list:
+  - model_name: gpt-4-32k
+    litellm_params:
+      model: azure/gpt-4-32k 
+      api_base: os.environ/AZURE_API_BASE
+      api_key: os.environ/AZURE_API_KEY
+      api_version: os.environ/AZURE_API_VERSION
+      rpm: 20      # [OPTIONAL] Rate limit for this deployment: in requests per minute (rpm)
+
+litellm_settings: # module level litellm settings - https://github.com/BerriAI/litellm/blob/main/litellm/__init__.py
+  drop_params: True
+  set_verbose: False

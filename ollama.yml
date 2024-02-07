@@ -1,0 +1,88 @@
+- name: Deploy ollama with litellm 
+  hosts: servername # Hosts to deploy the service to
+  become: true
+  gather_facts: true
+
+  vars:
+    nfs_server: 192.168.0.2 # IP address of the NFS server
+    nfs_path: /mnt/docker # Path to the NFS share
+    container_name: ollama-litellm # Docker-compose stack name
+    docker_compose_dir: "/home/username/docker" # Directory to store docker-compose files, the directory must exist
+    ansible_python_interpreter: /bin/python3 # Path to the Python interpreter
+    repo_url: "https://github.com/ollama-webui/ollama-webui.git" # URL of the git repository
+
+  tasks:
+    - name: Include vault secrets
+      ansible.builtin.include_vars:
+        file: secrets.yml
+      no_log: true
+
+    - name: Create directory for docker-compose
+      ansible.builtin.file:
+        path: "{{ docker_compose_dir }}/{{ container_name }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Clone git repository
+      ansible.builtin.git:
+        repo: "{{ repo_url }}"
+        dest: "{{ docker_compose_dir }}/{{ container_name }}"
+        clone: true
+        update: true
+
+    - name: Check if ollama directories exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: ollama_check
+      loop:
+        - "{{ nfs_path }}/ollama-litellm"
+        - "{{ nfs_path }}/ollama-litellm/{{ ansible_hostname }}"
+        - "{{ nfs_path }}/ollama-litellm/{{ ansible_hostname }}/ollamawebui_data"
+        - "{{ nfs_path }}/ollama-litellm/{{ ansible_hostname }}/litellm_data"
+      loop_control:
+        label: "{{ item }}"
+
+    - name: Create ollama directories if they don't exist
+      ansible.builtin.file:
+        state: directory
+        path: "{{ item.item }}"
+        mode: '0755'
+      when: not item.stat.exists
+      loop: "{{ ollama_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Change ownership of ollama directories
+      ansible.builtin.file:
+        state: directory
+        path: "{{ item.item }}"
+        owner: root
+        group: root
+        recurse: true
+      loop: "{{ ollama_check.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Copy config.yml to the NFS path
+      ansible.builtin.template:
+        src: ./litellm_config/config.yaml
+        dest: "{{ nfs_path }}/ollama-litellm/{{ ansible_hostname }}/litellm_data/config.yaml"
+        owner: root
+        group: root
+        mode: '0775'
+
+    - name: Create a new docker-compose.yml file
+      ansible.builtin.template:
+        dest: "{{ docker_compose_dir }}/{{ container_name }}/docker-compose.yml"
+        src: "ollama-docker-compose.yml.j2"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Run ollama service using docker-compose
+      community.docker.docker_compose:
+        project_src: "{{ docker_compose_dir }}/{{ container_name }}"
+        state: present
+        project_name: "{{ container_name }}"

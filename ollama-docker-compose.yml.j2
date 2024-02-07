@@ -1,0 +1,66 @@
+version: '3.6'
+
+networks: ## Change the network name to match your network
+  custom-network:
+    external: true
+
+services:
+  ollama-webui:
+    build:
+      context: .
+      args:
+        OLLAMA_API_BASE_URL: '/ollama/api'
+      dockerfile: Dockerfile
+    image: ollama-webui:latest
+    container_name: ollama-webui
+    # ports: ## Uncomment this if you want to run the container without a reverse proxy
+    #   - 3000:8080
+    environment:
+      - "OLLAMA_API_BASE_URL=http://192.168.0.1:11434/api" # Change this to the IP of the ollama container or dedicated server
+      - "OPENAI_API_BASE_URL=http://litellm-proxy:8000/v1"
+      - "OPENAI_API_KEY=anykey" # This must be set to anything... if not ollamaWebUI wont connect. Not recommended for use in production!
+    restart: unless-stopped
+    volumes:
+      - type: volume
+        source: ollamawebui-data
+        target: /app/backend/data
+    networks:
+      custom-network:
+    labels: ## Comment this if you want to run the container without a reverse proxy
+      - "traefik.enable=true"
+      - "traefik.http.routers.ollama.entrypoints=websecure"
+      - "traefik.http.routers.ollama.rule=Host(`ollamawebui.domain.com`)"
+      - "traefik.http.routers.ollama.tls=true"
+      - "traefik.http.routers.ollama.tls.certresolver=production"
+      - "traefik.http.services.ollama.loadbalancer.server.port=8080"
+
+  litellm-proxy:
+      container_name: litellm-proxy
+      image: ghcr.io/berriai/litellm:main-latest
+      environment:
+        - "AZURE_API_KEY={{ AZURE_API_KEY }}"
+        - "AZURE_API_BASE={{ AZURE_API_BASE }}"
+        - "AZURE_API_VERSION={{ AZURE_API_VERSION }}"
+      # ports:
+      #   - 4000:8000
+      volumes:
+        #- ./litellm/config.yaml:/app/config.yaml ## Uncomment this if you want to use a local config file
+        - type: volume ## Comment this if you want to use a local config file
+          source: litellm-data
+          target: /app
+      command: [ "--config", "/app/config.yaml", "--port", "8000" ] # "--detailed_debug"
+      restart: unless-stopped
+      networks:
+        custom-network:
+
+volumes:
+  ollamawebui-data:
+    driver_opts:
+      type: "nfs"
+      o: "addr={{ nfs_server }},rw,nfsvers=4"
+      device: ":{{ nfs_path }}/ollama-litellm/{{ ansible_hostname }}/ollamawebui_data"
+  litellm-data:
+    driver_opts:
+      type: "nfs"
+      o: "addr={{ nfs_server }},rw,nfsvers=4"
+      device: ":{{ nfs_path }}/ollama-litellm/{{ ansible_hostname }}/litellm_data"
